@@ -14,6 +14,7 @@ void main() {
           body: LevelCompleteOverlay(
             levelNumber: 5,
             movesTaken: 7,
+            bestMoves: 7,
             starsEarned: 3,
             onNextLevel: () => nextLevelTapped = true,
             onReplay: () => replayTapped = true,
@@ -29,7 +30,7 @@ void main() {
     expect(find.text('Moves Taken: 7'), findsOneWidget);
     expect(find.text('NEXT LEVEL'), findsOneWidget);
     expect(find.text('Replay'), findsOneWidget);
-    expect(find.text('Levels'), findsOneWidget);
+    expect(find.text('Map'), findsOneWidget);
 
     await tester.tap(find.text('NEXT LEVEL'));
     expect(nextLevelTapped, isTrue);
@@ -37,7 +38,7 @@ void main() {
     await tester.tap(find.text('Replay'));
     expect(replayTapped, isTrue);
 
-    await tester.tap(find.text('Levels'));
+    await tester.tap(find.text('Map'));
     expect(levelSelectTapped, isTrue);
   });
 }

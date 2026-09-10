@@ -1,3 +1,4 @@
+import '../models/account_model.dart';
 import '../models/achievement.dart';
 import '../models/level_progress.dart';
 import '../models/reward_transaction.dart';
@@ -27,6 +28,9 @@ abstract class GameRepository {
 
   Future<Map<String, Achievement>> getAchievements();
   Future<void> saveAchievement(Achievement achievement);
+
+  Future<AccountModel?> getSavedAccountModel();
+  Future<void> saveAccountModel(AccountModel account);
 
   Future<bool> isSoundEnabled();
   Future<void> setSoundEnabled(bool enabled);

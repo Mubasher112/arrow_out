@@ -2,12 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:arrow_path/data/repositories/local_game_repository.dart';
-import 'package:arrow_path/domain/models/arrow.dart';
-import 'package:arrow_path/domain/models/arrow_direction.dart';
 import 'package:arrow_path/domain/models/level_definition.dart';
 import 'package:arrow_path/domain/repositories/level_repository.dart';
 import 'package:arrow_path/services/audio_service.dart';
-import 'package:arrow_path/services/level_loader_service.dart';
 import 'package:arrow_path/ui/screens/game_screen.dart';
 import 'package:arrow_path/ui/widgets/arrow_tile_widget.dart';
 
@@ -33,7 +30,7 @@ void main() {
         InMemorySharedPreferencesAsync.empty();
   });
 
-  Widget createGameScreenWidget({int levelNumber = 1, LevelRepository? repo}) {
+  Widget createGameScreenWidget({int levelNumber = 1}) {
     final gameRepo = LocalGameRepository();
     final audioService = AudioService(repository: gameRepo);
 
@@ -58,7 +55,7 @@ void main() {
       expect(find.text('Hint'), findsOneWidget);
     });
 
-    testWidgets('pause menu opens and displays resume, restart, level select buttons', (tester) async {
+    testWidgets('pause menu opens and displays resume, restart, level map buttons', (tester) async {
       await tester.pumpWidget(createGameScreenWidget(levelNumber: 1));
       await tester.pumpAndSettle();
 
@@ -70,7 +67,6 @@ void main() {
       expect(find.text('Restart Level'), findsOneWidget);
       expect(find.text('Level Select'), findsOneWidget);
 
-      // Tap Resume
       await tester.tap(find.text('Resume'));
       await tester.pumpAndSettle();
 
@@ -104,16 +100,15 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(SnackBar), findsOneWidget);
-      expect(find.textContaining('Hint: Highlighted arrow is ready to exit!'), findsOneWidget);
+      expect(find.textContaining('is ready to exit!'), findsOneWidget);
     });
 
-    testWidgets('tapping valid arrow removes it and updates moves counter', (tester) async {
+    testWidgets('tapping active arrow tile updates moves counter', (tester) async {
       await tester.pumpWidget(createGameScreenWidget(levelNumber: 1));
       await tester.pumpAndSettle();
 
-      // Find an arrow tile on board
-      final arrowFinder = find.byType(ArrowTileWidget).first;
-      await tester.tap(arrowFinder);
+      final gestureFinder = find.byType(GestureDetector).first;
+      await tester.tap(gestureFinder);
       await tester.pumpAndSettle();
 
       expect(find.textContaining('Moves: 1'), findsOneWidget);

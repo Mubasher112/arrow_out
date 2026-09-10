@@ -1,23 +1,32 @@
 import 'package:flutter/material.dart';
+import '../../data/repositories/cloud_game_repository.dart';
 import '../../domain/repositories/game_repository.dart';
 import '../../services/audio_service.dart';
+import '../../services/auth_service.dart';
 import '../../services/daily_challenge_service.dart';
+import '../../services/mock_auth_service.dart';
 import '../../services/progression_service.dart';
+import '../../services/sync_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/settings_dialog.dart';
 import 'achievements_screen.dart';
 import 'daily_challenge_screen.dart';
 import 'game_screen.dart';
 import 'level_map_screen.dart';
+import 'profile_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final GameRepository repository;
   final AudioService audioService;
+  final AuthService? authService;
+  final SyncService? syncService;
 
   const HomeScreen({
     super.key,
     required this.repository,
     required this.audioService,
+    this.authService,
+    this.syncService,
   });
 
   @override
@@ -27,6 +36,8 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   late ProgressionService _progressionService;
   late DailyChallengeService _dailyService;
+  late AuthService _authService;
+  late SyncService _syncService;
 
   int _currentLevel = 1;
   int _totalStars = 0;
@@ -40,6 +51,13 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _progressionService = ProgressionService(repository: widget.repository);
     _dailyService = DailyChallengeService(repository: widget.repository);
+    _authService = widget.authService ?? MockAuthService();
+    _syncService = widget.syncService ??
+        SyncService(
+          localRepository: widget.repository,
+          cloudRepository: InMemoryCloudRepository(),
+          authService: _authService,
+        );
     _loadProgress();
   }
 
@@ -127,6 +145,22 @@ class _HomeScreenState extends State<HomeScreen> {
         .then((_) => _loadProgress());
   }
 
+  void _openProfile() {
+    widget.audioService.playSound(SoundType.buttonClick);
+    Navigator.of(context)
+        .push(
+      MaterialPageRoute(
+        builder: (_) => ProfileScreen(
+          repository: widget.repository,
+          authService: _authService,
+          syncService: _syncService,
+          audioService: widget.audioService,
+        ),
+      ),
+    )
+        .then((_) => _loadProgress());
+  }
+
   void _openSettings() {
     widget.audioService.playSound(SoundType.buttonClick);
     showDialog(
@@ -149,14 +183,14 @@ class _HomeScreenState extends State<HomeScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
                 child: Column(
                   children: [
-                    // Top Bar with Stars Badge, Coins Counter, and Settings
+                    // Top Bar with Stars, Coins, Profile & Settings
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Row(
                           children: [
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                               decoration: BoxDecoration(
                                 color: AppTheme.bgLight,
                                 borderRadius: BorderRadius.circular(16),
@@ -164,18 +198,18 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                               child: Row(
                                 children: [
-                                  const Icon(Icons.star_rounded, color: AppTheme.goldStar, size: 20),
+                                  const Icon(Icons.star_rounded, color: AppTheme.goldStar, size: 18),
                                   const SizedBox(width: 4),
                                   Text(
                                     '$_totalStars',
-                                    style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+                                    style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 13),
                                   ),
                                 ],
                               ),
                             ),
-                            const SizedBox(width: 8),
+                            const SizedBox(width: 6),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                               decoration: BoxDecoration(
                                 color: AppTheme.bgLight,
                                 borderRadius: BorderRadius.circular(16),
@@ -183,20 +217,28 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                               child: Row(
                                 children: [
-                                  const Icon(Icons.monetization_on_rounded, color: AppTheme.goldStar, size: 20),
+                                  const Icon(Icons.monetization_on_rounded, color: AppTheme.goldStar, size: 18),
                                   const SizedBox(width: 4),
                                   Text(
                                     '$_coins',
-                                    style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+                                    style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 13),
                                   ),
                                 ],
                               ),
                             ),
                           ],
                         ),
-                        IconButton(
-                          icon: const Icon(Icons.settings, color: Colors.white, size: 28),
-                          onPressed: _openSettings,
+                        Row(
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.account_circle_rounded, color: Colors.white, size: 28),
+                              onPressed: _openProfile,
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.settings, color: Colors.white, size: 28),
+                              onPressed: _openSettings,
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -276,7 +318,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             const SizedBox(width: 14),
                             const Expanded(
                               child: Column(
-                                crossAxisAlignment: CrossAlignment.start,
+                                crossAlignment: CrossAlignment.start,
                                 children: [
                                   Text(
                                     'DAILY CHALLENGE',

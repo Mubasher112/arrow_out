@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../domain/models/account_model.dart';
 import '../../domain/models/achievement.dart';
 import '../../domain/models/level_progress.dart';
 import '../../domain/models/reward_transaction.dart';
@@ -19,6 +20,7 @@ class LocalGameRepository implements GameRepository {
   static const String _keyDailyChallengeResults = 'arrow_path_daily_challenge_results';
   static const String _keyLongestStreak = 'arrow_path_longest_streak';
   static const String _keyAchievements = 'arrow_path_achievements';
+  static const String _keyAccountModel = 'arrow_path_account_model';
 
   final SharedPreferencesAsync _prefs;
 
@@ -29,7 +31,6 @@ class LocalGameRepository implements GameRepository {
   Future<int> getCurrentLevel() async {
     final level = await _prefs.getInt(_keyCurrentLevel);
     if (level != null) return level;
-    // Check v1 key for backward compatibility migration
     final v1Level = await _prefs.getInt('arrow_path_current_level');
     return v1Level ?? 1;
   }
@@ -200,6 +201,22 @@ class LocalGameRepository implements GameRepository {
   }
 
   @override
+  Future<AccountModel?> getSavedAccountModel() async {
+    final jsonStr = await _prefs.getString(_keyAccountModel);
+    if (jsonStr == null || jsonStr.isEmpty) return null;
+    try {
+      return AccountModel.fromJson(jsonDecode(jsonStr) as Map<String, dynamic>);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
+  Future<void> saveAccountModel(AccountModel account) async {
+    await _prefs.setString(_keyAccountModel, jsonEncode(account.toJson()));
+  }
+
+  @override
   Future<bool> isSoundEnabled() async {
     return (await _prefs.getBool(_keySoundEnabled)) ?? true;
   }
@@ -243,5 +260,6 @@ class LocalGameRepository implements GameRepository {
     await _prefs.remove(_keyDailyChallengeResults);
     await _prefs.remove(_keyLongestStreak);
     await _prefs.remove(_keyAchievements);
+    await _prefs.remove(_keyAccountModel);
   }
 }
