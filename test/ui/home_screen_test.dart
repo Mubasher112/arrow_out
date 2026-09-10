@@ -26,17 +26,17 @@ void main() {
   }
 
   group('HomeScreen Widget Tests', () {
-    testWidgets('renders title, play button and settings button', (tester) async {
+    testWidgets('renders title, continue level button and level map button', (tester) async {
       await tester.pumpWidget(createHomeScreenWidget());
       await tester.pumpAndSettle();
 
       expect(find.text('ARROW PATH'), findsOneWidget);
-      expect(find.text('PLAY LEVEL 1'), findsOneWidget);
-      expect(find.text('LEVEL SELECT'), findsOneWidget);
+      expect(find.textContaining('CONTINUE LEVEL 1'), findsOneWidget);
+      expect(find.text('LEVEL MAP'), findsOneWidget);
       expect(find.byIcon(Icons.settings), findsOneWidget);
     });
 
-    testWidgets('tapping settings opens SettingsDialog', (tester) async {
+    testWidgets('tapping settings opens SettingsDialog with reset option', (tester) async {
       await tester.pumpWidget(createHomeScreenWidget());
       await tester.pumpAndSettle();
 
@@ -44,9 +44,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Settings'), findsOneWidget);
-      expect(find.text('Sound Effects'), findsOneWidget);
-      expect(find.text('Music'), findsOneWidget);
-      expect(find.text('Haptics'), findsOneWidget);
+      expect(find.text('Reset All Progress'), findsOneWidget);
     });
   });
 }

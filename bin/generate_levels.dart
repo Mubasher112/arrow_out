@@ -4,9 +4,9 @@ import 'package:arrow_path/domain/level_generator.dart';
 import 'package:arrow_path/domain/level_validator.dart';
 
 void main() {
-  print('Generating 100 verified solvable levels using LevelGenerator and LevelValidator...');
+  print('Generating 500 verified solvable levels using LevelGenerator and LevelValidator...');
   final generator = LevelGenerator(seed: 2026);
-  final levels = generator.generate100Levels();
+  final levels = generator.generate500Levels();
 
   int validatedCount = 0;
   for (final level in levels) {
@@ -30,5 +30,5 @@ void main() {
 
   final file = File('assets/levels/levels.json');
   file.writeAsStringSync(jsonString);
-  print('Saved levels to assets/levels/levels.json (${file.lengthSync()} bytes)');
+  print('Saved 500 levels to assets/levels/levels.json (${file.lengthSync()} bytes)');
 }

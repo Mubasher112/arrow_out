@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import '../../domain/models/level_progress.dart';
 import '../../domain/repositories/game_repository.dart';
 import '../../services/audio_service.dart';
+import '../../services/progression_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/settings_dialog.dart';
-import 'level_select_screen.dart';
 import 'game_screen.dart';
+import 'level_map_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final GameRepository repository;
@@ -22,6 +22,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  late ProgressionService _progressionService;
   int _currentLevel = 1;
   int _totalStars = 0;
   int _completedCount = 0;
@@ -30,6 +31,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    _progressionService = ProgressionService(repository: widget.repository);
     _loadProgress();
   }
 
@@ -37,19 +39,18 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => _isLoading = true);
     final cur = await widget.repository.getCurrentLevel();
     final allProgress = await widget.repository.getAllProgress();
+    final stars = await _progressionService.getTotalStars();
 
-    int stars = 0;
     int completed = 0;
     allProgress.forEach((_, p) {
       if (p.isCompleted) {
         completed++;
-        stars += p.stars;
       }
     });
 
     if (mounted) {
       setState(() {
-        _currentLevel = cur;
+        _currentLevel = cur.clamp(1, 500);
         _totalStars = stars;
         _completedCount = completed;
         _isLoading = false;
@@ -72,12 +73,12 @@ class _HomeScreenState extends State<HomeScreen> {
         .then((_) => _loadProgress());
   }
 
-  void _openLevelSelect() {
+  void _openLevelMap() {
     widget.audioService.playSound(SoundType.buttonClick);
     Navigator.of(context)
         .push(
       MaterialPageRoute(
-        builder: (_) => LevelSelectScreen(
+        builder: (_) => LevelMapScreen(
           repository: widget.repository,
           audioService: widget.audioService,
         ),
@@ -108,14 +109,12 @@ class _HomeScreenState extends State<HomeScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
                 child: Column(
                   children: [
-                    // Top Bar with Quick Controls
+                    // Top Bar with Stars Badge and Settings
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        // Stars Badge
                         Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                           decoration: BoxDecoration(
                             color: AppTheme.bgLight,
                             borderRadius: BorderRadius.circular(20),
@@ -123,12 +122,12 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                           child: Row(
                             children: [
-                              const Icon(Icons.star, color: AppTheme.goldStar, size: 22),
+                              const Icon(Icons.star_rounded, color: AppTheme.goldStar, size: 22),
                               const SizedBox(width: 8),
                               Text(
-                                '$_totalStars',
+                                '$_totalStars / 1500',
                                 style: const TextStyle(
-                                  fontSize: 18,
+                                  fontSize: 16,
                                   fontWeight: FontWeight.bold,
                                   color: Colors.white,
                                 ),
@@ -136,7 +135,6 @@ class _HomeScreenState extends State<HomeScreen> {
                             ],
                           ),
                         ),
-                        // Quick Settings Button
                         IconButton(
                           icon: const Icon(Icons.settings, color: Colors.white, size: 28),
                           onPressed: _openSettings,
@@ -146,7 +144,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
                     const Spacer(),
 
-                    // Game Logo / Title Header
+                    // Title Header Card
                     Container(
                       padding: const EdgeInsets.all(24),
                       decoration: BoxDecoration(
@@ -170,7 +168,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: Column(
                         children: [
                           const Icon(
-                            Icons.navigation,
+                            Icons.navigation_rounded,
                             size: 72,
                             color: Colors.white,
                           ),
@@ -186,7 +184,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                           const SizedBox(height: 6),
                           Text(
-                            'Puzzle Extraction Game',
+                            '500 Extraction Puzzles',
                             style: TextStyle(
                               fontSize: 14,
                               color: Colors.white.withAlpha(200),
@@ -199,7 +197,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
                     const Spacer(),
 
-                    // Level Progress Info Card
+                    // Stats Bar
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
                       decoration: BoxDecoration(
@@ -210,7 +208,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceAround,
                         children: [
-                          _buildStatColumn('Current Level', '$_currentLevel / 100'),
+                          _buildStatColumn('Current Level', '$_currentLevel / 500'),
                           Container(width: 1, height: 30, color: Colors.white24),
                           _buildStatColumn('Completed', '$_completedCount'),
                         ],
@@ -219,7 +217,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
                     const SizedBox(height: 24),
 
-                    // Big Play Button
+                    // Play / Continue Button
                     SizedBox(
                       width: double.infinity,
                       height: 60,
@@ -233,9 +231,9 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                         icon: const Icon(Icons.play_arrow_rounded, size: 36),
                         label: Text(
-                          'PLAY LEVEL $_currentLevel',
+                          'CONTINUE LEVEL $_currentLevel',
                           style: const TextStyle(
-                            fontSize: 20,
+                            fontSize: 18,
                             fontWeight: FontWeight.bold,
                             letterSpacing: 1.0,
                           ),
@@ -246,7 +244,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
                     const SizedBox(height: 14),
 
-                    // Level Select Button
+                    // Level Map Button
                     SizedBox(
                       width: double.infinity,
                       height: 54,
@@ -258,16 +256,16 @@ class _HomeScreenState extends State<HomeScreen> {
                             borderRadius: BorderRadius.circular(20),
                           ),
                         ),
-                        icon: const Icon(Icons.grid_view_rounded, color: AppTheme.secondary),
+                        icon: const Icon(Icons.map_rounded, color: AppTheme.secondary),
                         label: const Text(
-                          'LEVEL SELECT',
+                          'LEVEL MAP',
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
                             letterSpacing: 1.0,
                           ),
                         ),
-                        onPressed: _openLevelSelect,
+                        onPressed: _openLevelMap,
                       ),
                     ),
 
@@ -284,10 +282,7 @@ class _HomeScreenState extends State<HomeScreen> {
       children: [
         Text(
           title,
-          style: const TextStyle(
-            fontSize: 12,
-            color: Colors.white60,
-          ),
+          style: const TextStyle(fontSize: 12, color: Colors.white60),
         ),
         const SizedBox(height: 4),
         Text(

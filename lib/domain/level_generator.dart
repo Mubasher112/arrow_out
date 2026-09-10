@@ -5,7 +5,7 @@ import 'models/difficulty.dart';
 import 'models/level_definition.dart';
 import 'level_validator.dart';
 
-/// Seeded, deterministic procedural level generator producing verified solvable puzzles.
+/// Seeded, deterministic procedural level generator producing 500 verified solvable puzzles.
 class LevelGenerator {
   final Random _random;
   final int seed;
@@ -49,34 +49,35 @@ class LevelGenerator {
     return _generateGuaranteedOuterLevel(levelNumber, rows, cols, count, difficulty);
   }
 
-  /// Generate level by sequential number (1..100) following task distribution:
-  /// 1-20: Easy
-  /// 21-50: Medium
-  /// 51-80: Medium/Hard
-  /// 81-100: Hard
+  /// Generate level by sequential number (1..500) following Task 4 progression structure:
+  /// 1-25: Tutorial / Very Easy (4x4)
+  /// 26-100: Easy (4x4 or 5x5)
+  /// 101-200: Medium (5x5 or 6x6)
+  /// 201-350: Hard (6x6 or 7x7)
+  /// 351-500: Expert (7x7 or 8x8)
   LevelDefinition generateLevel(int levelNumber) {
     int rows;
     int cols;
     Difficulty difficulty;
 
-    if (levelNumber <= 20) {
-      // 1-20: Easy (4x4 or 5x5)
-      rows = levelNumber <= 10 ? 4 : 5;
+    if (levelNumber <= 25) {
+      rows = 4;
+      cols = 4;
+      difficulty = Difficulty.easy;
+    } else if (levelNumber <= 100) {
+      rows = levelNumber <= 60 ? 4 : 5;
       cols = rows;
       difficulty = Difficulty.easy;
-    } else if (levelNumber <= 50) {
-      // 21-50: Medium (5x5 or 6x6)
-      rows = levelNumber <= 35 ? 5 : 6;
+    } else if (levelNumber <= 200) {
+      rows = levelNumber <= 150 ? 5 : 6;
       cols = rows;
       difficulty = Difficulty.medium;
-    } else if (levelNumber <= 80) {
-      // 51-80: Medium / Hard (6x6 or 7x7)
-      rows = levelNumber <= 65 ? 6 : 7;
+    } else if (levelNumber <= 350) {
+      rows = levelNumber <= 275 ? 6 : 7;
       cols = rows;
       difficulty = Difficulty.hard;
     } else {
-      // 81-100: Hard (7x7 or 8x8)
-      rows = levelNumber <= 90 ? 7 : 8;
+      rows = levelNumber <= 425 ? 7 : 8;
       cols = rows;
       difficulty = Difficulty.hard;
     }
@@ -89,10 +90,13 @@ class LevelGenerator {
     );
   }
 
-  /// Generate 100 levels matching task distribution.
-  List<LevelDefinition> generate100Levels() {
-    return List.generate(100, (i) => generateLevel(i + 1));
+  /// Generate 500 levels matching task distribution.
+  List<LevelDefinition> generate500Levels() {
+    return List.generate(500, (i) => generateLevel(i + 1));
   }
+
+  /// Alias for 100 level legacy callers
+  List<LevelDefinition> generate100Levels() => generate500Levels();
 
   int _getDefaultArrowCount(int rows, int cols, Difficulty difficulty) {
     final totalCells = rows * cols;

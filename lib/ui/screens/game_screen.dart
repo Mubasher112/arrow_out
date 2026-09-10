@@ -3,10 +3,13 @@ import 'package:flutter/material.dart';
 import '../../domain/game_engine.dart';
 import '../../domain/models/game_status.dart';
 import '../../domain/models/level_definition.dart';
-import '../../domain/models/level_progress.dart';
 import '../../domain/repositories/game_repository.dart';
 import '../../services/audio_service.dart';
+import '../../services/hint_service.dart';
 import '../../services/level_loader_service.dart';
+import '../../services/progression_service.dart';
+import '../../services/star_rating_service.dart';
+import '../../services/tutorial_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/arrow_board_widget.dart';
 import '../widgets/level_complete_overlay.dart';
@@ -30,17 +33,24 @@ class GameScreen extends StatefulWidget {
 
 class _GameScreenState extends State<GameScreen> {
   late GameEngine _engine;
+  late ProgressionService _progressionService;
   final LevelLoaderService _levelLoader = LevelLoaderService();
+  final HintService _hintService = HintService();
+
   int _currentLevelNum = 1;
   String? _hintArrowId;
   bool _isInit = false;
   String? _errorMessage;
+
+  ScoreEvaluation? _lastCompletionEval;
+  int _previousBestMoves = 0;
 
   @override
   void initState() {
     super.initState();
     _currentLevelNum = widget.levelNumber;
     _engine = GameEngine();
+    _progressionService = ProgressionService(repository: widget.repository);
     _engine.addListener(_onEngineUpdate);
     _loadLevel(_currentLevelNum);
   }
@@ -57,11 +67,16 @@ class _GameScreenState extends State<GameScreen> {
       _isInit = false;
       _hintArrowId = null;
       _errorMessage = null;
+      _lastCompletionEval = null;
     });
 
     try {
+      final existingProgress = await widget.repository.getLevelProgress(levelNum);
+      _previousBestMoves = existingProgress?.bestMoves ?? 0;
+
       final levelDef = await _levelLoader.loadLevel(levelNum);
       _engine.startLevel(levelDef);
+      _hintService.resetSession();
 
       if (mounted) {
         setState(() => _isInit = true);
@@ -79,7 +94,7 @@ class _GameScreenState extends State<GameScreen> {
   void _onEngineUpdate() {
     if (!mounted) return;
 
-    if (_engine.status == GameStatus.completed) {
+    if (_engine.status == GameStatus.completed && _lastCompletionEval == null) {
       _handleLevelCompleted();
     } else {
       setState(() {});
@@ -92,33 +107,22 @@ class _GameScreenState extends State<GameScreen> {
     final level = _engine.currentLevel;
     if (level == null) return;
 
-    final moves = _engine.moves;
-    final stars = level.calculateStars(moves);
-
-    final progress = LevelProgress(
-      levelNumber: level.levelNumber,
-      isCompleted: true,
-      stars: stars,
-      bestMoves: moves,
+    final eval = await _progressionService.recordLevelCompletion(
+      level: level,
+      movesTaken: _engine.moves,
     );
 
-    await widget.repository.saveLevelProgress(progress);
-
-    // Save current level + 1 as highest unlocked
-    final curHighest = await widget.repository.getCurrentLevel();
-    if (level.levelNumber >= curHighest && level.levelNumber < 100) {
-      await widget.repository.setCurrentLevel(level.levelNumber + 1);
-    }
-
     if (mounted) {
-      setState(() {});
+      setState(() {
+        _lastCompletionEval = eval;
+      });
     }
   }
 
   void _onArrowTap(String arrowId) {
     if (_engine.status != GameStatus.playing) return;
 
-    setState(() => _hintArrowId = null); // Clear hint on interaction
+    setState(() => _hintArrowId = null);
 
     final result = _engine.moveArrow(arrowId);
 
@@ -126,7 +130,6 @@ class _GameScreenState extends State<GameScreen> {
       widget.audioService.playSound(SoundType.arrowExit);
     } else {
       widget.audioService.playSound(SoundType.blocked);
-      // Reset blocked state after shake animation
       Timer(const Duration(milliseconds: 350), () {
         _engine.resetBlockedState(arrowId);
       });
@@ -142,16 +145,16 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   void _onHintTap() {
-    final hintArrow = _engine.getHint();
-    if (hintArrow != null) {
+    final hintRes = _hintService.getHint(_engine);
+    if (hintRes.hasAvailableHint && hintRes.recommendedArrow != null) {
       widget.audioService.playSound(SoundType.buttonClick);
       setState(() {
-        _hintArrowId = hintArrow.id;
+        _hintArrowId = hintRes.recommendedArrow!.id;
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Hint: Highlighted arrow is ready to exit!'),
-          duration: Duration(seconds: 2),
+        SnackBar(
+          content: Text(hintRes.message!),
+          duration: const Duration(seconds: 2),
           backgroundColor: AppTheme.primary,
         ),
       );
@@ -190,13 +193,12 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   void _nextLevel() {
-    if (_currentLevelNum < 100) {
+    if (_currentLevelNum < 500) {
       setState(() {
         _currentLevelNum++;
       });
       _loadLevel(_currentLevelNum);
     } else {
-      // Final Level 100 completed!
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
@@ -204,13 +206,13 @@ class _GameScreenState extends State<GameScreen> {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           title: const Text('Congratulations!', style: TextStyle(color: Colors.white)),
           content: const Text(
-            'You have successfully cleared all 100 levels!',
+            'You have successfully cleared all 500 levels!',
             style: TextStyle(color: Colors.white70),
           ),
           actions: [
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primary),
-              child: const Text('Level Select'),
+              child: const Text('Level Map'),
               onPressed: () {
                 Navigator.of(ctx).pop();
                 Navigator.of(context).pop();
@@ -225,6 +227,7 @@ class _GameScreenState extends State<GameScreen> {
   @override
   Widget build(BuildContext context) {
     final level = _engine.currentLevel;
+    final tutorialMsg = TutorialService.getTutorialMessage(_currentLevelNum);
 
     return PopScope(
       canPop: true,
@@ -282,6 +285,28 @@ class _GameScreenState extends State<GameScreen> {
                               ),
                             ),
 
+                            // Tutorial Banner if applicable
+                            if (tutorialMsg != null)
+                              Container(
+                                width: double.infinity,
+                                margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.primary.withAlpha(200),
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(color: AppTheme.secondary),
+                                ),
+                                child: Text(
+                                  tutorialMsg,
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ),
+
                             const Spacer(),
 
                             // Interactive Board Area
@@ -334,12 +359,17 @@ class _GameScreenState extends State<GameScreen> {
                           ],
                         ),
 
-                        // Level Completed Dialog Overlay
+                        // Level Completed Overlay
                         if (_engine.status == GameStatus.completed)
                           LevelCompleteOverlay(
                             levelNumber: _currentLevelNum,
                             movesTaken: _engine.moves,
-                            starsEarned: level?.calculateStars(_engine.moves) ?? 3,
+                            bestMoves: _previousBestMoves > 0 && _previousBestMoves < _engine.moves
+                                ? _previousBestMoves
+                                : _engine.moves,
+                            starsEarned: _lastCompletionEval?.stars ??
+                                (level?.calculateStars(_engine.moves) ?? 3),
+                            isNewBest: _lastCompletionEval?.isNewBest ?? true,
                             onNextLevel: _nextLevel,
                             onReplay: () => _loadLevel(_currentLevelNum),
                             onLevelSelect: () => Navigator.of(context).pop(),
@@ -378,7 +408,7 @@ class _GameScreenState extends State<GameScreen> {
                 OutlinedButton.icon(
                   style: OutlinedButton.styleFrom(foregroundColor: Colors.white),
                   icon: const Icon(Icons.grid_view_rounded),
-                  label: const Text('Level Select'),
+                  label: const Text('Level Map'),
                   onPressed: () => Navigator.of(context).pop(),
                 ),
               ],

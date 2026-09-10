@@ -4,7 +4,9 @@ import '../theme/app_theme.dart';
 class LevelCompleteOverlay extends StatefulWidget {
   final int levelNumber;
   final int movesTaken;
+  final int bestMoves;
   final int starsEarned;
+  final bool isNewBest;
   final VoidCallback onNextLevel;
   final VoidCallback onReplay;
   final VoidCallback onLevelSelect;
@@ -13,7 +15,9 @@ class LevelCompleteOverlay extends StatefulWidget {
     super.key,
     required this.levelNumber,
     required this.movesTaken,
+    required this.bestMoves,
     required this.starsEarned,
+    this.isNewBest = false,
     required this.onNextLevel,
     required this.onReplay,
     required this.onLevelSelect,
@@ -75,16 +79,34 @@ class _LevelCompleteOverlayState extends State<LevelCompleteOverlay>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                if (widget.isNewBest)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: AppTheme.goldStar,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Text(
+                      '★ NEW BEST! ★',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.black,
+                        color: Colors.black,
+                      ),
+                    ),
+                  ),
+
                 const Icon(
                   Icons.emoji_events_rounded,
                   size: 64,
                   color: AppTheme.goldStar,
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 8),
                 Text(
                   'LEVEL ${widget.levelNumber} CLEARED!',
                   style: const TextStyle(
-                    fontSize: 22,
+                    fontSize: 20,
                     fontWeight: FontWeight.black,
                     letterSpacing: 1.0,
                     color: Colors.white,
@@ -92,7 +114,7 @@ class _LevelCompleteOverlayState extends State<LevelCompleteOverlay>
                 ),
                 const SizedBox(height: 16),
 
-                // Star Rating Row
+                // Animated Stars Row
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: List.generate(3, (index) {
@@ -117,13 +139,27 @@ class _LevelCompleteOverlayState extends State<LevelCompleteOverlay>
                     color: AppTheme.bgDark,
                     borderRadius: BorderRadius.circular(16),
                   ),
-                  child: Text(
-                    'Moves Taken: ${widget.movesTaken}',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: AppTheme.secondary,
-                    ),
+                  child: Column(
+                    children: [
+                      Text(
+                        'Moves Taken: ${widget.movesTaken}',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.secondary,
+                        ),
+                      ),
+                      if (widget.bestMoves > 0) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          'Best: ${widget.bestMoves} moves',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Colors.white60,
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
 
@@ -181,7 +217,7 @@ class _LevelCompleteOverlayState extends State<LevelCompleteOverlay>
                           padding: const EdgeInsets.symmetric(vertical: 12),
                         ),
                         icon: const Icon(Icons.grid_view_rounded, size: 20),
-                        label: const Text('Levels'),
+                        label: const Text('Map'),
                         onPressed: widget.onLevelSelect,
                       ),
                     ),

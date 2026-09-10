@@ -45,12 +45,12 @@ void main() {
     });
   });
 
-  group('100 Playable Levels Validation', () {
-    test('generates and verifies 100 levels are 100% solvable', () {
+  group('500 Playable Levels Validation', () {
+    test('generates and verifies 500 levels are 100% solvable', () {
       final generator = LevelGenerator(seed: 2026);
-      final levels = generator.generate100Levels();
+      final levels = generator.generate500Levels();
 
-      expect(levels.length, 100);
+      expect(levels.length, 500);
 
       for (final level in levels) {
         expect(level.initialArrows.isNotEmpty, isTrue,
@@ -60,14 +60,14 @@ void main() {
       }
     });
 
-    test('saved assets/levels/levels.json contains 100 solvable levels', () {
+    test('saved assets/levels/levels.json contains 500 solvable levels', () {
       final file = File('assets/levels/levels.json');
       expect(file.existsSync(), isTrue, reason: 'levels.json asset file must exist');
 
       final jsonString = file.readAsStringSync();
       final List<dynamic> jsonList = jsonDecode(jsonString) as List<dynamic>;
 
-      expect(jsonList.length, 100);
+      expect(jsonList.length, 500);
 
       for (int i = 0; i < jsonList.length; i++) {
         final level = LevelDefinition.fromJson(jsonList[i] as Map<String, dynamic>);
