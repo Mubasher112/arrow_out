@@ -164,7 +164,7 @@ class GameEngine extends ChangeNotifier {
     }
 
     final arrow = _board!.getArrowById(arrowId);
-    if (arrow == null || arrow.state == ArrowState.removed) {
+    if (arrow == null || arrow.state == ArrowState.removed || arrow.state == ArrowState.animatingExit) {
       const fallbackArrow = Arrow(id: '', row: 0, column: 0, direction: ArrowDirection.up);
       return MoveResult(
         isValid: false,
@@ -192,14 +192,14 @@ class GameEngine extends ChangeNotifier {
         failedAttempts: _failedAttempts,
       ));
 
-      // Remove arrow from active board
-      _board = _board!.removeArrow(arrowId);
-      _successfulMoves++;
+      // Transition arrow state to animatingExit so UI can run translation/fade animation
+      final updatedArrows = _board!.arrows.map((a) {
+        if (a.id == arrowId) return a.copyWith(state: ArrowState.animatingExit);
+        return a;
+      }).toList();
 
-      final isComplete = _board!.isCleared;
-      if (isComplete) {
-        _status = GameStatus.completed;
-      }
+      _board = _board!.copyWith(arrows: updatedArrows);
+      _successfulMoves++;
 
       notifyListeners();
 
@@ -232,6 +232,22 @@ class GameEngine extends ChangeNotifier {
         resultingStatus: _status,
         message: 'Path blocked by arrow ${blocking.id}',
       );
+    }
+  }
+
+  /// Complete arrow exit after exit animation finishes.
+  void completeArrowExit(String arrowId) {
+    if (_board == null) return;
+    final arrow = _board!.getArrowById(arrowId);
+    if (arrow != null && arrow.state == ArrowState.animatingExit) {
+      _board = _board!.removeArrow(arrowId);
+
+      final isComplete = _board!.isCleared;
+      if (isComplete) {
+        _status = GameStatus.completed;
+      }
+
+      notifyListeners();
     }
   }
 

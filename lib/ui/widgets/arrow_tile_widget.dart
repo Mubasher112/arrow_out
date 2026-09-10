@@ -1,4 +1,3 @@
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../../domain/models/arrow.dart';
 import '../../domain/models/arrow_state.dart';
@@ -114,57 +113,76 @@ class _ArrowTileWidgetState extends State<ArrowTileWidget>
   Widget build(BuildContext context) {
     final arrow = widget.arrow;
 
-    return Container(
-      width: widget.tileSize,
-      height: widget.tileSize,
-      margin: const EdgeInsets.all(2.0),
-      decoration: BoxDecoration(
-        color: AppTheme.tileBg,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.tileBorder, width: 1.5),
-        boxShadow: const [
-          BoxShadow(
-            color: Colors.black26,
-            blurRadius: 2,
-            offset: Offset(0, 1),
-          ),
-        ],
-      ),
-      child: arrow == null || arrow.state == ArrowState.removed
-          ? const SizedBox.shrink()
-          : AnimatedBuilder(
-              animation: Listenable.merge([_shakeController, _exitController]),
-              builder: (context, child) {
-                final shakeVal = _shakeAnimation.value;
-                final isHint = widget.hintArrowId == arrow.id;
+    if (arrow == null || arrow.state == ArrowState.removed) {
+      return Container(
+        width: widget.tileSize,
+        height: widget.tileSize,
+        margin: const EdgeInsets.all(2.0),
+        decoration: BoxDecoration(
+          color: AppTheme.tileBg,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppTheme.tileBorder, width: 1.5),
+        ),
+      );
+    }
 
-                return Transform.translate(
-                  offset: Offset(shakeVal, 0) +
-                      Offset(
-                        _exitAnimation.value.dx * widget.tileSize,
-                        _exitAnimation.value.dy * widget.tileSize,
-                      ),
-                  child: Opacity(
-                    opacity: _fadeAnimation.value.clamp(0.0, 1.0),
-                    child: GestureDetector(
-                      onTap: () {
-                        if (arrow.state != ArrowState.animatingExit) {
-                          widget.onTap?.call(arrow.id);
-                        }
-                      },
-                      child: CustomPaint(
-                        size: Size(widget.tileSize, widget.tileSize),
-                        painter: ArrowPainter(
-                          direction: arrow.direction,
-                          state: arrow.state,
-                          isHighlighted: isHint,
-                        ),
-                      ),
+    final semanticLabel =
+        'Arrow pointing ${arrow.direction.name}, row ${arrow.row + 1}, column ${arrow.column + 1}';
+
+    return Semantics(
+      label: semanticLabel,
+      button: true,
+      enabled: arrow.state != ArrowState.animatingExit,
+      child: Container(
+        width: widget.tileSize,
+        height: widget.tileSize,
+        margin: const EdgeInsets.all(2.0),
+        decoration: BoxDecoration(
+          color: AppTheme.tileBg,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppTheme.tileBorder, width: 1.5),
+          boxShadow: const [
+            BoxShadow(
+              color: Colors.black26,
+              blurRadius: 2,
+              offset: Offset(0, 1),
+            ),
+          ],
+        ),
+        child: AnimatedBuilder(
+          animation: Listenable.merge([_shakeController, _exitController]),
+          builder: (context, child) {
+            final shakeVal = _shakeAnimation.value;
+            final isHint = widget.hintArrowId == arrow.id;
+
+            return Transform.translate(
+              offset: Offset(shakeVal, 0) +
+                  Offset(
+                    _exitAnimation.value.dx * widget.tileSize,
+                    _exitAnimation.value.dy * widget.tileSize,
+                  ),
+              child: Opacity(
+                opacity: _fadeAnimation.value.clamp(0.0, 1.0),
+                child: GestureDetector(
+                  onTap: () {
+                    if (arrow.state != ArrowState.animatingExit) {
+                      widget.onTap?.call(arrow.id);
+                    }
+                  },
+                  child: CustomPaint(
+                    size: Size(widget.tileSize, widget.tileSize),
+                    painter: ArrowPainter(
+                      direction: arrow.direction,
+                      state: arrow.state,
+                      isHighlighted: isHint,
                     ),
                   ),
-                );
-              },
-            ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
     );
   }
 }

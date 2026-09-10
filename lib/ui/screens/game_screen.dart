@@ -10,7 +10,7 @@ import '../../services/level_loader_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/arrow_board_widget.dart';
 import '../widgets/level_complete_overlay.dart';
-import '../widgets/settings_dialog.dart';
+import '../widgets/pause_dialog.dart';
 
 class GameScreen extends StatefulWidget {
   final int levelNumber;
@@ -34,6 +34,7 @@ class _GameScreenState extends State<GameScreen> {
   int _currentLevelNum = 1;
   String? _hintArrowId;
   bool _isInit = false;
+  String? _errorMessage;
 
   @override
   void initState() {
@@ -55,14 +56,23 @@ class _GameScreenState extends State<GameScreen> {
     setState(() {
       _isInit = false;
       _hintArrowId = null;
+      _errorMessage = null;
     });
 
-    final levelDef = await _levelLoader.loadLevel(levelNum);
-    _engine.loadLevel(levelDef);
-    _engine.startGame();
+    try {
+      final levelDef = await _levelLoader.loadLevel(levelNum);
+      _engine.startLevel(levelDef);
 
-    if (mounted) {
-      setState(() => _isInit = true);
+      if (mounted) {
+        setState(() => _isInit = true);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isInit = true;
+          _errorMessage = 'Failed to load level $levelNum. Please try again.';
+        });
+      }
     }
   }
 
@@ -153,16 +163,28 @@ class _GameScreenState extends State<GameScreen> {
     _loadLevel(_currentLevelNum);
   }
 
-  void _openSettings() {
+  void _openPauseMenu() {
     _engine.pauseGame();
     showDialog(
       context: context,
-      builder: (_) => SettingsDialog(
+      barrierDismissible: false,
+      builder: (_) => PauseDialog(
+        levelNumber: _currentLevelNum,
         audioService: widget.audioService,
-        repository: widget.repository,
+        onResume: () {
+          _engine.resumeGame();
+        },
+        onRestart: () {
+          _loadLevel(_currentLevelNum);
+        },
+        onLevelSelect: () {
+          Navigator.of(context).pop();
+        },
       ),
     ).then((_) {
-      _engine.resumeGame();
+      if (_engine.status == GameStatus.paused) {
+        _engine.resumeGame();
+      }
       setState(() {});
     });
   }
@@ -174,7 +196,29 @@ class _GameScreenState extends State<GameScreen> {
       });
       _loadLevel(_currentLevelNum);
     } else {
-      Navigator.of(context).pop();
+      // Final Level 100 completed!
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: AppTheme.bgLight,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text('Congratulations!', style: TextStyle(color: Colors.white)),
+          content: const Text(
+            'You have successfully cleared all 100 levels!',
+            style: TextStyle(color: Colors.white70),
+          ),
+          actions: [
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primary),
+              child: const Text('Level Select'),
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        ),
+      );
     }
   }
 
@@ -182,114 +226,165 @@ class _GameScreenState extends State<GameScreen> {
   Widget build(BuildContext context) {
     final level = _engine.currentLevel;
 
-    return Scaffold(
-      body: SafeArea(
-        child: !_isInit || level == null
-            ? const Center(child: CircularProgressIndicator())
-            : Stack(
-                children: [
-                  Column(
-                    children: [
-                      // Header Bar
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return PopScope(
+      canPop: true,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) {
+          widget.audioService.playSound(SoundType.buttonClick);
+        }
+      },
+      child: Scaffold(
+        body: SafeArea(
+          child: !_isInit
+              ? const Center(child: CircularProgressIndicator())
+              : _errorMessage != null
+                  ? _buildErrorView()
+                  : Stack(
+                      children: [
+                        Column(
                           children: [
-                            IconButton(
-                              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-                              onPressed: () => Navigator.of(context).pop(),
-                            ),
-                            Column(
-                              children: [
-                                Text(
-                                  'LEVEL $_currentLevelNum',
-                                  style: const TextStyle(
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
+                            // Header Bar
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
+                                    onPressed: () => Navigator.of(context).pop(),
                                   ),
-                                ),
-                                Text(
-                                  'Moves: ${_engine.moves}',
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                    color: AppTheme.secondary,
-                                    fontWeight: FontWeight.bold,
+                                  Column(
+                                    children: [
+                                      Text(
+                                        'LEVEL $_currentLevelNum',
+                                        style: const TextStyle(
+                                          fontSize: 22,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                      Text(
+                                        'Moves: ${_engine.moves}',
+                                        style: const TextStyle(
+                                          fontSize: 14,
+                                          color: AppTheme.secondary,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                ),
-                              ],
+                                  IconButton(
+                                    icon: const Icon(Icons.pause_circle_filled_rounded,
+                                        color: Colors.white, size: 32),
+                                    onPressed: _openPauseMenu,
+                                  ),
+                                ],
+                              ),
                             ),
-                            IconButton(
-                              icon: const Icon(Icons.pause_circle_filled_rounded,
-                                  color: Colors.white, size: 32),
-                              onPressed: _openSettings,
+
+                            const Spacer(),
+
+                            // Interactive Board Area
+                            Expanded(
+                              flex: 8,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                                child: ArrowBoardWidget(
+                                  board: _engine.board!,
+                                  hintArrowId: _hintArrowId,
+                                  onArrowTap: _onArrowTap,
+                                  onArrowExitComplete: (arrowId) {
+                                    _engine.completeArrowExit(arrowId);
+                                  },
+                                ),
+                              ),
+                            ),
+
+                            const Spacer(),
+
+                            // Bottom Action Controls
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 24.0, left: 24.0, right: 24.0),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                children: [
+                                  _buildActionButton(
+                                    icon: Icons.refresh_rounded,
+                                    label: 'Restart',
+                                    onPressed: _onRestartTap,
+                                    color: AppTheme.cardBg,
+                                  ),
+                                  _buildActionButton(
+                                    icon: Icons.undo_rounded,
+                                    label: 'Undo',
+                                    onPressed: _engine.canUndo ? _onUndoTap : null,
+                                    color: AppTheme.cardBg,
+                                  ),
+                                  _buildActionButton(
+                                    icon: Icons.lightbulb_rounded,
+                                    label: 'Hint',
+                                    onPressed: _onHintTap,
+                                    color: AppTheme.goldStar.withAlpha(200),
+                                    iconColor: Colors.black,
+                                    textColor: Colors.white,
+                                  ),
+                                ],
+                              ),
                             ),
                           ],
                         ),
-                      ),
 
-                      const Spacer(),
-
-                      // Interactive Board Area
-                      Expanded(
-                        flex: 8,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                          child: ArrowBoardWidget(
-                            board: _engine.board!,
-                            hintArrowId: _hintArrowId,
-                            onArrowTap: _onArrowTap,
+                        // Level Completed Dialog Overlay
+                        if (_engine.status == GameStatus.completed)
+                          LevelCompleteOverlay(
+                            levelNumber: _currentLevelNum,
+                            movesTaken: _engine.moves,
+                            starsEarned: level?.calculateStars(_engine.moves) ?? 3,
+                            onNextLevel: _nextLevel,
+                            onReplay: () => _loadLevel(_currentLevelNum),
+                            onLevelSelect: () => Navigator.of(context).pop(),
                           ),
-                        ),
-                      ),
-
-                      const Spacer(),
-
-                      // Bottom Action Controls
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 24.0, left: 24.0, right: 24.0),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                          children: [
-                            _buildActionButton(
-                              icon: Icons.refresh_rounded,
-                              label: 'Restart',
-                              onPressed: _onRestartTap,
-                              color: AppTheme.cardBg,
-                            ),
-                            _buildActionButton(
-                              icon: Icons.undo_rounded,
-                              label: 'Undo',
-                              onPressed: _engine.canUndo ? _onUndoTap : null,
-                              color: AppTheme.cardBg,
-                            ),
-                            _buildActionButton(
-                              icon: Icons.lightbulb_rounded,
-                              label: 'Hint',
-                              onPressed: _onHintTap,
-                              color: AppTheme.goldStar.withAlpha(200),
-                              iconColor: Colors.black,
-                              textColor: Colors.white,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  // Level Completed Dialog Overlay
-                  if (_engine.status == GameStatus.completed)
-                    LevelCompleteOverlay(
-                      levelNumber: _currentLevelNum,
-                      movesTaken: _engine.moves,
-                      starsEarned: level.calculateStars(_engine.moves),
-                      onNextLevel: _nextLevel,
-                      onReplay: () => _loadLevel(_currentLevelNum),
-                      onLevelSelect: () => Navigator.of(context).pop(),
+                      ],
                     ),
-                ],
-              ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildErrorView() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error_outline_rounded, size: 64, color: AppTheme.accent),
+            const SizedBox(height: 16),
+            Text(
+              _errorMessage!,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 18, color: Colors.white),
+            ),
+            const SizedBox(height: 24),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('Retry'),
+                  onPressed: () => _loadLevel(_currentLevelNum),
+                ),
+                const SizedBox(width: 12),
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(foregroundColor: Colors.white),
+                  icon: const Icon(Icons.grid_view_rounded),
+                  label: const Text('Level Select'),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
