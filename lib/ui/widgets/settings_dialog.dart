@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../config/environment.dart';
 import '../../domain/repositories/game_repository.dart';
 import '../../services/audio_service.dart';
 import '../../services/monetization_service.dart';
@@ -78,6 +79,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
   Widget build(BuildContext context) {
     final service = widget.monetizationService;
     final adsRemoved = service?.adsRemoved ?? false;
+    final config = AppConfig.defaultConfig;
 
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
@@ -172,21 +174,30 @@ class _SettingsDialogState extends State<SettingsDialog> {
 
             const SizedBox(height: 8),
 
-            // Restore Purchases & Privacy
+            // Restore Purchases & Legal Links
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
                 TextButton.icon(
-                  icon: const Icon(Icons.restore_rounded, size: 18, color: Colors.white70),
-                  label: const Text('Restore Purchases', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                  icon: const Icon(Icons.restore_rounded, size: 16, color: Colors.white70),
+                  label: const Text('Restore', style: TextStyle(color: Colors.white70, fontSize: 11)),
                   onPressed: _isPurchasing ? null : _handleRestorePurchases,
                 ),
                 TextButton.icon(
-                  icon: const Icon(Icons.privacy_tip_rounded, size: 18, color: Colors.white70),
-                  label: const Text('Privacy', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                  icon: const Icon(Icons.privacy_tip_rounded, size: 16, color: Colors.white70),
+                  label: const Text('Privacy', style: TextStyle(color: Colors.white70, fontSize: 11)),
                   onPressed: () {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Privacy Policy: No personal ad data is collected or shared.')),
+                      SnackBar(content: Text('Privacy Policy: ${config.privacyPolicyUrl}')),
+                    );
+                  },
+                ),
+                TextButton.icon(
+                  icon: const Icon(Icons.description_rounded, size: 16, color: Colors.white70),
+                  label: const Text('Terms', style: TextStyle(color: Colors.white70, fontSize: 11)),
+                  onPressed: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Terms of Service: ${config.termsOfServiceUrl}')),
                     );
                   },
                 ),
