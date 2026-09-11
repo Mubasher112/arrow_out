@@ -1,7 +1,11 @@
 import '../models/account_model.dart';
 import '../models/achievement.dart';
+import '../models/event_model.dart';
 import '../models/level_progress.dart';
+import '../models/notification_settings.dart';
+import '../models/remote_config_model.dart';
 import '../models/reward_transaction.dart';
+import '../models/weekly_challenge.dart';
 import '../../services/daily_challenge_service.dart';
 
 /// Abstract repository interface for player data persistence.
@@ -31,6 +35,24 @@ abstract class GameRepository {
 
   Future<AccountModel?> getSavedAccountModel();
   Future<void> saveAccountModel(AccountModel account);
+
+  Future<String?> getLastDailyLoginClaimIso();
+  Future<void> setLastDailyLoginClaimIso(String iso);
+
+  Future<int> getCurrentLoginDay();
+  Future<void> setCurrentLoginDay(int day);
+
+  Future<Map<String, WeeklyChallenge>> getWeeklyChallenges();
+  Future<void> saveWeeklyChallenge(WeeklyChallenge challenge);
+
+  Future<EventModel?> getSavedEvent();
+  Future<void> saveEvent(EventModel event);
+
+  Future<NotificationSettings> getNotificationSettings();
+  Future<void> setNotificationSettings(NotificationSettings settings);
+
+  Future<RemoteConfigModel?> getRemoteConfig();
+  Future<void> saveRemoteConfig(RemoteConfigModel config);
 
   Future<bool> isAdsRemoved();
   Future<void> setAdsRemoved(bool removed);

@@ -2,8 +2,12 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../domain/models/account_model.dart';
 import '../../domain/models/achievement.dart';
+import '../../domain/models/event_model.dart';
 import '../../domain/models/level_progress.dart';
+import '../../domain/models/notification_settings.dart';
+import '../../domain/models/remote_config_model.dart';
 import '../../domain/models/reward_transaction.dart';
+import '../../domain/models/weekly_challenge.dart';
 import '../../domain/repositories/game_repository.dart';
 import '../../services/daily_challenge_service.dart';
 
@@ -22,6 +26,13 @@ class LocalGameRepository implements GameRepository {
   static const String _keyAchievements = 'arrow_path_achievements';
   static const String _keyAccountModel = 'arrow_path_account_model';
   static const String _keyAdsRemoved = 'arrow_path_ads_removed';
+
+  static const String _keyLastDailyLoginClaimIso = 'arrow_path_last_daily_login_claim_iso';
+  static const String _keyCurrentLoginDay = 'arrow_path_current_login_day';
+  static const String _keyWeeklyChallenges = 'arrow_path_weekly_challenges';
+  static const String _keySavedEvent = 'arrow_path_saved_event';
+  static const String _keyNotificationSettings = 'arrow_path_notification_settings';
+  static const String _keyRemoteConfig = 'arrow_path_remote_config';
 
   final SharedPreferencesAsync _prefs;
 
@@ -218,6 +229,103 @@ class LocalGameRepository implements GameRepository {
   }
 
   @override
+  Future<String?> getLastDailyLoginClaimIso() async {
+    return await _prefs.getString(_keyLastDailyLoginClaimIso);
+  }
+
+  @override
+  Future<void> setLastDailyLoginClaimIso(String iso) async {
+    await _prefs.setString(_keyLastDailyLoginClaimIso, iso);
+  }
+
+  @override
+  Future<int> getCurrentLoginDay() async {
+    final day = await _prefs.getInt(_keyCurrentLoginDay);
+    return day ?? 1;
+  }
+
+  @override
+  Future<void> setCurrentLoginDay(int day) async {
+    await _prefs.setInt(_keyCurrentLoginDay, day);
+  }
+
+  @override
+  Future<Map<String, WeeklyChallenge>> getWeeklyChallenges() async {
+    final jsonStr = await _prefs.getString(_keyWeeklyChallenges);
+    if (jsonStr == null || jsonStr.isEmpty) return {};
+
+    try {
+      final Map<String, dynamic> rawMap = jsonDecode(jsonStr) as Map<String, dynamic>;
+      final Map<String, WeeklyChallenge> resultMap = {};
+      rawMap.forEach((k, v) {
+        resultMap[k] = WeeklyChallenge.fromJson(v as Map<String, dynamic>);
+      });
+      return resultMap;
+    } catch (_) {
+      return {};
+    }
+  }
+
+  @override
+  Future<void> saveWeeklyChallenge(WeeklyChallenge challenge) async {
+    final map = await getWeeklyChallenges();
+    map[challenge.id] = challenge;
+
+    final rawMap = <String, dynamic>{};
+    map.forEach((k, v) => rawMap[k] = v.toJson());
+
+    await _prefs.setString(_keyWeeklyChallenges, jsonEncode(rawMap));
+  }
+
+  @override
+  Future<EventModel?> getSavedEvent() async {
+    final jsonStr = await _prefs.getString(_keySavedEvent);
+    if (jsonStr == null || jsonStr.isEmpty) return null;
+    try {
+      return EventModel.fromJson(jsonDecode(jsonStr) as Map<String, dynamic>);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
+  Future<void> saveEvent(EventModel event) async {
+    await _prefs.setString(_keySavedEvent, jsonEncode(event.toJson()));
+  }
+
+  @override
+  Future<NotificationSettings> getNotificationSettings() async {
+    final jsonStr = await _prefs.getString(_keyNotificationSettings);
+    if (jsonStr == null || jsonStr.isEmpty) return const NotificationSettings();
+    try {
+      return NotificationSettings.fromJson(jsonDecode(jsonStr) as Map<String, dynamic>);
+    } catch (_) {
+      return const NotificationSettings();
+    }
+  }
+
+  @override
+  Future<void> setNotificationSettings(NotificationSettings settings) async {
+    await _prefs.setString(_keyNotificationSettings, jsonEncode(settings.toJson()));
+  }
+
+  @override
+  Future<RemoteConfigModel?> getRemoteConfig() async {
+    final jsonStr = await _prefs.getString(_keyRemoteConfig);
+    if (jsonStr == null || jsonStr.isEmpty) return null;
+    try {
+      return RemoteConfigModel.fromJson(jsonDecode(jsonStr) as Map<String, dynamic>);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
+  Future<void> saveRemoteConfig(RemoteConfigModel config) async {
+    await _prefs.setString(_keyRemoteConfig, jsonEncode(config.toJson()));
+  }
+
+  @override
   Future<bool> isAdsRemoved() async {
     final removed = await _prefs.getBool(_keyAdsRemoved);
     return removed ?? false;
@@ -274,5 +382,11 @@ class LocalGameRepository implements GameRepository {
     await _prefs.remove(_keyAchievements);
     await _prefs.remove(_keyAccountModel);
     await _prefs.remove(_keyAdsRemoved);
+    await _prefs.remove(_keyLastDailyLoginClaimIso);
+    await _prefs.remove(_keyCurrentLoginDay);
+    await _prefs.remove(_keyWeeklyChallenges);
+    await _prefs.remove(_keySavedEvent);
+    await _prefs.remove(_keyNotificationSettings);
+    await _prefs.remove(_keyRemoteConfig);
   }
 }

@@ -6,18 +6,25 @@ import '../../domain/repositories/game_repository.dart';
 import '../../services/audio_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/daily_challenge_service.dart';
+import '../../services/daily_login_service.dart';
 import '../../services/mock_auth_service.dart';
+import '../../services/monetization_service.dart';
 import '../../services/progression_service.dart';
+import '../../services/reward_service.dart';
 import '../../services/sync_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/banner_ad_widget.dart';
+import '../widgets/daily_reward_dialog.dart';
 import '../widgets/settings_dialog.dart';
 import 'achievements_screen.dart';
 import 'daily_challenge_screen.dart';
+import 'event_screen.dart';
 import 'friends_screen.dart';
 import 'game_screen.dart';
 import 'leaderboard_screen.dart';
 import 'level_map_screen.dart';
 import 'profile_screen.dart';
+import 'weekly_challenges_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final GameRepository repository;
@@ -25,6 +32,7 @@ class HomeScreen extends StatefulWidget {
   final AuthService? authService;
   final SyncService? syncService;
   final SocialRepository? socialRepository;
+  final MonetizationService? monetizationService;
 
   const HomeScreen({
     super.key,
@@ -33,6 +41,7 @@ class HomeScreen extends StatefulWidget {
     this.authService,
     this.syncService,
     this.socialRepository,
+    this.monetizationService,
   });
 
   @override
@@ -42,15 +51,16 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   late ProgressionService _progressionService;
   late DailyChallengeService _dailyService;
+  late DailyLoginService _loginService;
   late AuthService _authService;
   late SyncService _syncService;
   late SocialRepository _socialRepository;
 
   int _currentLevel = 1;
   int _totalStars = 0;
-  int _completedCount = 0;
   int _coins = 0;
   int _streak = 0;
+  bool _isDailyRewardReady = false;
   bool _isLoading = true;
 
   @override
@@ -58,6 +68,11 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _progressionService = ProgressionService(repository: widget.repository);
     _dailyService = DailyChallengeService(repository: widget.repository);
+    final rewardService = RewardService(repository: widget.repository);
+    _loginService = DailyLoginService(
+      repository: widget.repository,
+      rewardService: rewardService,
+    );
     _authService = widget.authService ?? MockAuthService();
     _socialRepository = widget.socialRepository ?? InMemorySocialRepository();
     _syncService = widget.syncService ??
@@ -72,17 +87,10 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _loadProgress() async {
     setState(() => _isLoading = true);
     final cur = await widget.repository.getCurrentLevel();
-    final allProgress = await widget.repository.getAllProgress();
     final stars = await _progressionService.getTotalStars();
     final coins = await widget.repository.getCoinsBalance();
     final streakData = await _dailyService.calculateStreaks();
-
-    int completed = 0;
-    allProgress.forEach((_, p) {
-      if (p.isCompleted) {
-        completed++;
-      }
-    });
+    final todayClaimed = await _loginService.isTodayClaimed();
 
     if (mounted) {
       setState(() {
@@ -90,7 +98,7 @@ class _HomeScreenState extends State<HomeScreen> {
         _totalStars = stars;
         _coins = coins;
         _streak = streakData['currentStreak'] ?? 0;
-        _completedCount = completed;
+        _isDailyRewardReady = !todayClaimed;
         _isLoading = false;
       });
     }
@@ -105,10 +113,23 @@ class _HomeScreenState extends State<HomeScreen> {
           levelNumber: _currentLevel,
           repository: widget.repository,
           audioService: widget.audioService,
+          monetizationService: widget.monetizationService,
         ),
       ),
     )
         .then((_) => _loadProgress());
+  }
+
+  void _openDailyRewardModal() {
+    widget.audioService.playSound(SoundType.buttonClick);
+    showDialog(
+      context: context,
+      builder: (_) => DailyRewardDialog(
+        repository: widget.repository,
+        audioService: widget.audioService,
+        onRewardClaimed: _loadProgress,
+      ),
+    );
   }
 
   void _openDailyChallenge() {
@@ -117,6 +138,34 @@ class _HomeScreenState extends State<HomeScreen> {
         .push(
       MaterialPageRoute(
         builder: (_) => DailyChallengeScreen(
+          repository: widget.repository,
+          audioService: widget.audioService,
+        ),
+      ),
+    )
+        .then((_) => _loadProgress());
+  }
+
+  void _openWeeklyChallenges() {
+    widget.audioService.playSound(SoundType.buttonClick);
+    Navigator.of(context)
+        .push(
+      MaterialPageRoute(
+        builder: (_) => WeeklyChallengesScreen(
+          repository: widget.repository,
+          audioService: widget.audioService,
+        ),
+      ),
+    )
+        .then((_) => _loadProgress());
+  }
+
+  void _openEvent() {
+    widget.audioService.playSound(SoundType.buttonClick);
+    Navigator.of(context)
+        .push(
+      MaterialPageRoute(
+        builder: (_) => EventScreen(
           repository: widget.repository,
           audioService: widget.audioService,
         ),
@@ -206,6 +255,7 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (_) => SettingsDialog(
         audioService: widget.audioService,
         repository: widget.repository,
+        monetizationService: widget.monetizationService,
         onDataReset: _loadProgress,
       ),
     ).then((_) => setState(() {}));
@@ -218,7 +268,7 @@ class _HomeScreenState extends State<HomeScreen> {
         child: _isLoading
             ? const Center(child: CircularProgressIndicator())
             : Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 12.0),
+                padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 10.0),
                 child: Column(
                   children: [
                     // Top Bar
@@ -238,10 +288,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 children: [
                                   const Icon(Icons.star_rounded, color: AppTheme.goldStar, size: 18),
                                   const SizedBox(width: 4),
-                                  Text(
-                                    '$_totalStars',
-                                    style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 13),
-                                  ),
+                                  Text('$_totalStars', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 13)),
                                 ],
                               ),
                             ),
@@ -257,10 +304,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 children: [
                                   const Icon(Icons.monetization_on_rounded, color: AppTheme.goldStar, size: 18),
                                   const SizedBox(width: 4),
-                                  Text(
-                                    '$_coins',
-                                    style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 13),
-                                  ),
+                                  Text('$_coins', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 13)),
                                 ],
                               ),
                             ),
@@ -268,6 +312,11 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                         Row(
                           children: [
+                            if (_isDailyRewardReady)
+                              IconButton(
+                                icon: const Icon(Icons.card_giftcard_rounded, color: AppTheme.goldStar, size: 28),
+                                onPressed: _openDailyRewardModal,
+                              ),
                             IconButton(
                               icon: const Icon(Icons.account_circle_rounded, color: Colors.white, size: 28),
                               onPressed: _openProfile,
@@ -285,7 +334,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
                     // Title Header Card
                     Container(
-                      padding: const EdgeInsets.all(18),
+                      padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           colors: [
@@ -295,7 +344,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                         ),
-                        borderRadius: BorderRadius.circular(28),
+                        borderRadius: BorderRadius.circular(24),
                         boxShadow: [
                           BoxShadow(
                             color: AppTheme.primary.withAlpha(80),
@@ -306,25 +355,15 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       child: Column(
                         children: [
-                          const Icon(Icons.navigation_rounded, size: 54, color: Colors.white),
-                          const SizedBox(height: 6),
+                          const Icon(Icons.navigation_rounded, size: 48, color: Colors.white),
+                          const SizedBox(height: 4),
                           const Text(
                             'ARROW PATH',
-                            style: TextStyle(
-                              fontSize: 26,
-                              fontWeight: FontWeight.black,
-                              letterSpacing: 2.0,
-                              color: Colors.white,
-                            ),
+                            style: TextStyle(fontSize: 24, fontWeight: FontWeight.black, letterSpacing: 2.0, color: Colors.white),
                           ),
-                          const SizedBox(height: 2),
                           Text(
                             '500 Extraction Puzzles',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.white.withAlpha(200),
-                              letterSpacing: 1.0,
-                            ),
+                            style: TextStyle(fontSize: 11, color: Colors.white.withAlpha(200), letterSpacing: 1.0),
                           ),
                         ],
                       ),
@@ -332,48 +371,72 @@ class _HomeScreenState extends State<HomeScreen> {
 
                     const Spacer(),
 
+                    // Limited-Time Event Banner Button
+                    InkWell(
+                      onTap: _openEvent,
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [AppTheme.accent.withAlpha(200), AppTheme.primary.withAlpha(200)],
+                          ),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: const Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(Icons.celebration_rounded, color: AppTheme.goldStar, size: 20),
+                                SizedBox(width: 8),
+                                Text('ARROW FESTIVAL 🎉', style: TextStyle(fontWeight: FontWeight.black, color: Colors.white, fontSize: 13)),
+                              ],
+                            ),
+                            Text('4d left', style: TextStyle(fontSize: 11, color: Colors.white70)),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 8),
+
                     // Daily Challenge Quick Card
                     InkWell(
                       onTap: _openDailyChallenge,
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: BorderRadius.circular(16),
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                         decoration: BoxDecoration(
                           color: AppTheme.bgLight,
-                          borderRadius: BorderRadius.circular(20),
+                          borderRadius: BorderRadius.circular(16),
                           border: Border.all(color: AppTheme.accent.withAlpha(150), width: 1.5),
                         ),
                         child: Row(
                           children: [
                             Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: const BoxDecoration(
-                                color: AppTheme.accent,
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(Icons.today_rounded, color: Colors.white, size: 20),
+                              padding: const EdgeInsets.all(6),
+                              decoration: const BoxDecoration(color: AppTheme.accent, shape: BoxShape.circle),
+                              child: const Icon(Icons.today_rounded, color: Colors.white, size: 18),
                             ),
-                            const SizedBox(width: 12),
+                            const SizedBox(width: 10),
                             const Expanded(
                               child: Column(
                                 crossAlignment: CrossAlignment.start,
                                 children: [
-                                  Text(
-                                    'DAILY CHALLENGE',
-                                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
-                                  ),
-                                  Text('Today\'s Special Puzzle', style: TextStyle(fontSize: 11, color: Colors.white60)),
+                                  Text('DAILY CHALLENGE', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white)),
+                                  Text('Today\'s Special Puzzle', style: TextStyle(fontSize: 10, color: Colors.white60)),
                                 ],
                               ),
                             ),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                              decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(16)),
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(12)),
                               child: Row(
                                 children: [
-                                  const Icon(Icons.whatshot_rounded, color: AppTheme.goldStar, size: 16),
-                                  const SizedBox(width: 4),
-                                  Text('$_streak Day', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)),
+                                  const Icon(Icons.whatshot_rounded, color: AppTheme.goldStar, size: 14),
+                                  const SizedBox(width: 2),
+                                  Text('$_streak Day', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)),
                                 ],
                               ),
                             ),
@@ -382,98 +445,97 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
 
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 10),
 
                     // Play / Continue Button
                     SizedBox(
                       width: double.infinity,
-                      height: 54,
+                      height: 50,
                       child: ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppTheme.primary,
                           elevation: 6,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                         ),
-                        icon: const Icon(Icons.play_arrow_rounded, size: 30),
+                        icon: const Icon(Icons.play_arrow_rounded, size: 28),
                         label: Text(
                           'CONTINUE LEVEL $_currentLevel',
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.0),
+                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, letterSpacing: 1.0),
                         ),
                         onPressed: _playCurrentLevel,
                       ),
                     ),
 
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 8),
 
-                    // Navigation Actions Row 1
+                    // Navigation Actions Grid
                     Row(
                       children: [
                         Expanded(
                           child: SizedBox(
-                            height: 46,
+                            height: 42,
                             child: OutlinedButton.icon(
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: Colors.white,
                                 side: const BorderSide(color: AppTheme.secondary, width: 1.5),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                               ),
-                              icon: const Icon(Icons.map_rounded, color: AppTheme.secondary, size: 18),
-                              label: const Text('MAP', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                              icon: const Icon(Icons.map_rounded, color: AppTheme.secondary, size: 16),
+                              label: const Text('MAP', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                               onPressed: _openLevelMap,
                             ),
                           ),
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 6),
                         Expanded(
                           child: SizedBox(
-                            height: 46,
+                            height: 42,
                             child: OutlinedButton.icon(
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: Colors.white,
                                 side: const BorderSide(color: AppTheme.goldStar, width: 1.5),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                               ),
-                              icon: const Icon(Icons.military_tech_rounded, color: AppTheme.goldStar, size: 18),
-                              label: const Text('BADGES', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                              onPressed: _openAchievements,
+                              icon: const Icon(Icons.timer_rounded, color: AppTheme.goldStar, size: 16),
+                              label: const Text('WEEKLY 🎯', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                              onPressed: _openWeeklyChallenges,
                             ),
                           ),
                         ),
                       ],
                     ),
 
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 6),
 
-                    // Navigation Actions Row 2 (Social)
                     Row(
                       children: [
                         Expanded(
                           child: SizedBox(
-                            height: 46,
+                            height: 42,
                             child: OutlinedButton.icon(
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: Colors.white,
                                 side: const BorderSide(color: AppTheme.primaryLight, width: 1.5),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                               ),
-                              icon: const Icon(Icons.leaderboard_rounded, color: AppTheme.primaryLight, size: 18),
-                              label: const Text('RANKS 🏆', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                              icon: const Icon(Icons.leaderboard_rounded, color: AppTheme.primaryLight, size: 16),
+                              label: const Text('RANKS 🏆', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                               onPressed: _openLeaderboard,
                             ),
                           ),
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 6),
                         Expanded(
                           child: SizedBox(
-                            height: 46,
+                            height: 42,
                             child: OutlinedButton.icon(
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: Colors.white,
                                 side: const BorderSide(color: AppTheme.secondary, width: 1.5),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                               ),
-                              icon: const Icon(Icons.people_alt_rounded, color: AppTheme.secondary, size: 18),
-                              label: const Text('FRIENDS 👥', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                              icon: const Icon(Icons.people_alt_rounded, color: AppTheme.secondary, size: 16),
+                              label: const Text('FRIENDS 👥', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                               onPressed: _openFriends,
                             ),
                           ),
@@ -481,7 +543,15 @@ class _HomeScreenState extends State<HomeScreen> {
                       ],
                     ),
 
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 6),
+
+                    // Non-intrusive Banner Container
+                    BannerAdWidget(
+                      placement: AdPlacement.bannerHome,
+                      monetizationService: widget.monetizationService,
+                    ),
+
+                    const SizedBox(height: 8),
                   ],
                 ),
               ),
