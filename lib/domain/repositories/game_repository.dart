@@ -32,6 +32,9 @@ abstract class GameRepository {
   Future<AccountModel?> getSavedAccountModel();
   Future<void> saveAccountModel(AccountModel account);
 
+  Future<bool> isAdsRemoved();
+  Future<void> setAdsRemoved(bool removed);
+
   Future<bool> isSoundEnabled();
   Future<void> setSoundEnabled(bool enabled);
 

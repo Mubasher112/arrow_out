@@ -9,6 +9,7 @@ class RewardService {
   static const int rewardThreeStarBonus = 30;
   static const int rewardDailyChallenge = 100;
   static const int rewardStreakMilestone = 150;
+  static const int rewardRewardedAd = 50;
 
   RewardService({required GameRepository repository}) : _repository = repository;
 
@@ -34,7 +35,7 @@ class RewardService {
     final baseRef = 'level_complete_$levelNumber';
     if (!await hasClaimed(baseRef)) {
       final tx = RewardTransaction(
-        id: 'tx_lvl_$levelNumber\_$now',
+        id: 'tx_lvl_${levelNumber}_$now',
         type: RewardType.levelComplete,
         amount: rewardLevelComplete,
         timestamp: now,
@@ -49,7 +50,7 @@ class RewardService {
       final starRef = 'level_3star_$levelNumber';
       if (!await hasClaimed(starRef)) {
         final tx = RewardTransaction(
-          id: 'tx_star_$levelNumber\_$now',
+          id: 'tx_star_${levelNumber}_$now',
           type: RewardType.threeStarBonus,
           amount: rewardThreeStarBonus,
           timestamp: now,
@@ -71,7 +72,7 @@ class RewardService {
 
     final now = DateTime.now().millisecondsSinceEpoch;
     final tx = RewardTransaction(
-      id: 'tx_daily_$dateIso\_$now',
+      id: 'tx_daily_${dateIso}_$now',
       type: RewardType.dailyChallenge,
       amount: rewardDailyChallenge,
       timestamp: now,
@@ -92,7 +93,7 @@ class RewardService {
 
     final now = DateTime.now().millisecondsSinceEpoch;
     final tx = RewardTransaction(
-      id: 'tx_streak_$currentStreak\_$now',
+      id: 'tx_streak_${currentStreak}_$now',
       type: RewardType.streakMilestone,
       amount: rewardStreakMilestone,
       timestamp: now,
@@ -102,5 +103,24 @@ class RewardService {
     await _repository.addRewardTransaction(tx);
     await _repository.addCoins(rewardStreakMilestone);
     return rewardStreakMilestone;
+  }
+
+  /// Grant rewarded ad coins (+50 coins) using unique transaction reference ID to prevent duplicates.
+  Future<int> grantRewardedAdCoins(String uniqueTxId) async {
+    final ref = 'rewarded_ad_coins_$uniqueTxId';
+    if (await hasClaimed(ref)) return 0;
+
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final tx = RewardTransaction(
+      id: 'tx_rad_${uniqueTxId}_$now',
+      type: RewardType.achievementUnlock, // reuse category for ad rewards
+      amount: rewardRewardedAd,
+      timestamp: now,
+      referenceId: ref,
+    );
+
+    await _repository.addRewardTransaction(tx);
+    await _repository.addCoins(rewardRewardedAd);
+    return rewardRewardedAd;
   }
 }

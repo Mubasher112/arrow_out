@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import '../../services/audio_service.dart';
+import '../../services/monetization_service.dart';
 import '../theme/app_theme.dart';
 
 class PauseDialog extends StatefulWidget {
   final int levelNumber;
   final AudioService audioService;
+  final MonetizationService? monetizationService;
   final VoidCallback onResume;
   final VoidCallback onRestart;
   final VoidCallback onLevelSelect;
@@ -13,6 +15,7 @@ class PauseDialog extends StatefulWidget {
     super.key,
     required this.levelNumber,
     required this.audioService,
+    this.monetizationService,
     required this.onResume,
     required this.onRestart,
     required this.onLevelSelect,

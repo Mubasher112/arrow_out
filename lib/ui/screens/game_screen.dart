@@ -1,13 +1,16 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../domain/game_engine.dart';
+import '../../domain/models/ad_placement.dart';
 import '../../domain/models/game_status.dart';
 import '../../domain/models/level_definition.dart';
 import '../../domain/repositories/game_repository.dart';
 import '../../services/audio_service.dart';
 import '../../services/hint_service.dart';
 import '../../services/level_loader_service.dart';
+import '../../services/monetization_service.dart';
 import '../../services/progression_service.dart';
+import '../../services/reward_service.dart';
 import '../../services/star_rating_service.dart';
 import '../../services/tutorial_service.dart';
 import '../theme/app_theme.dart';
@@ -19,12 +22,14 @@ class GameScreen extends StatefulWidget {
   final int levelNumber;
   final GameRepository repository;
   final AudioService audioService;
+  final MonetizationService? monetizationService;
 
   const GameScreen({
     super.key,
     required this.levelNumber,
     required this.repository,
     required this.audioService,
+    this.monetizationService,
   });
 
   @override
@@ -34,6 +39,7 @@ class GameScreen extends StatefulWidget {
 class _GameScreenState extends State<GameScreen> {
   late GameEngine _engine;
   late ProgressionService _progressionService;
+  late RewardService _rewardService;
   final LevelLoaderService _levelLoader = LevelLoaderService();
   final HintService _hintService = HintService();
 
@@ -51,6 +57,7 @@ class _GameScreenState extends State<GameScreen> {
     _currentLevelNum = widget.levelNumber;
     _engine = GameEngine();
     _progressionService = ProgressionService(repository: widget.repository);
+    _rewardService = RewardService(repository: widget.repository);
     _engine.addListener(_onEngineUpdate);
     _loadLevel(_currentLevelNum);
   }
@@ -112,11 +119,19 @@ class _GameScreenState extends State<GameScreen> {
       movesTaken: _engine.moves,
     );
 
+    await _rewardService.grantLevelRewards(
+      levelNumber: level.levelNumber,
+      stars: eval.stars,
+    );
+
     if (mounted) {
       setState(() {
         _lastCompletionEval = eval;
       });
     }
+
+    // Interstitial Ad Trigger
+    widget.monetizationService?.maybeShowInterstitial(AdPlacement.interstitialLevelComplete);
   }
 
   void _onArrowTap(String arrowId) {
@@ -144,7 +159,7 @@ class _GameScreenState extends State<GameScreen> {
     }
   }
 
-  void _onHintTap() {
+  void _triggerHint() {
     final hintRes = _hintService.getHint(_engine);
     if (hintRes.hasAvailableHint && hintRes.recommendedArrow != null) {
       widget.audioService.playSound(SoundType.buttonClick);
@@ -161,6 +176,51 @@ class _GameScreenState extends State<GameScreen> {
     }
   }
 
+  void _onHintTap() {
+    if (_hintService.hintsUsedInSession >= 2 && widget.monetizationService != null) {
+      // Offer Rewarded Video or Coins options
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: AppTheme.bgLight,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text('Need a Hint?', style: TextStyle(color: Colors.white)),
+          content: const Text(
+            'Watch a short video or spend coins to reveal the next unblocked arrow move.',
+            style: TextStyle(color: Colors.white70),
+          ),
+          actions: [
+            TextButton(
+              child: const Text('Watch Video (Free)', style: TextStyle(color: AppTheme.goldStar)),
+              onPressed: () async {
+                Navigator.of(ctx).pop();
+                final success = await widget.monetizationService!.showRewardedAd(
+                  placement: AdPlacement.rewardedHint,
+                  onRewardEarned: () async {
+                    _triggerHint();
+                  },
+                );
+                if (!success) {
+                  _triggerHint(); // Fallback
+                }
+              },
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primary),
+              child: const Text('Use Free Hint'),
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                _triggerHint();
+              },
+            ),
+          ],
+        ),
+      );
+    } else {
+      _triggerHint();
+    }
+  }
+
   void _onRestartTap() {
     widget.audioService.playSound(SoundType.buttonClick);
     _loadLevel(_currentLevelNum);
@@ -174,6 +234,7 @@ class _GameScreenState extends State<GameScreen> {
       builder: (_) => PauseDialog(
         levelNumber: _currentLevelNum,
         audioService: widget.audioService,
+        monetizationService: widget.monetizationService,
         onResume: () {
           _engine.resumeGame();
         },

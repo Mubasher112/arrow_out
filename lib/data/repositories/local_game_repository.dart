@@ -21,6 +21,7 @@ class LocalGameRepository implements GameRepository {
   static const String _keyLongestStreak = 'arrow_path_longest_streak';
   static const String _keyAchievements = 'arrow_path_achievements';
   static const String _keyAccountModel = 'arrow_path_account_model';
+  static const String _keyAdsRemoved = 'arrow_path_ads_removed';
 
   final SharedPreferencesAsync _prefs;
 
@@ -217,6 +218,17 @@ class LocalGameRepository implements GameRepository {
   }
 
   @override
+  Future<bool> isAdsRemoved() async {
+    final removed = await _prefs.getBool(_keyAdsRemoved);
+    return removed ?? false;
+  }
+
+  @override
+  Future<void> setAdsRemoved(bool removed) async {
+    await _prefs.setBool(_keyAdsRemoved, removed);
+  }
+
+  @override
   Future<bool> isSoundEnabled() async {
     return (await _prefs.getBool(_keySoundEnabled)) ?? true;
   }
@@ -261,5 +273,6 @@ class LocalGameRepository implements GameRepository {
     await _prefs.remove(_keyLongestStreak);
     await _prefs.remove(_keyAchievements);
     await _prefs.remove(_keyAccountModel);
+    await _prefs.remove(_keyAdsRemoved);
   }
 }
