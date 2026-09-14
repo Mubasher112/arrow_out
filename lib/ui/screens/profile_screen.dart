@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../domain/models/account_model.dart';
+import '../../domain/models/player_level.dart';
 import '../../domain/models/sync_status.dart';
 import '../../domain/repositories/game_repository.dart';
 import '../../services/achievement_service.dart';
@@ -8,15 +9,18 @@ import '../../services/auth_service.dart';
 import '../../services/daily_challenge_service.dart';
 import '../../services/progression_service.dart';
 import '../../services/reward_service.dart';
+import '../../services/support_service.dart';
 import '../../services/sync_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/auth_modal.dart';
+import '../widgets/support_dialog.dart';
 
 class ProfileScreen extends StatefulWidget {
   final GameRepository repository;
   final AuthService authService;
   final SyncService syncService;
   final AudioService audioService;
+  final SupportService? supportService;
 
   const ProfileScreen({
     super.key,
@@ -24,6 +28,7 @@ class ProfileScreen extends StatefulWidget {
     required this.authService,
     required this.syncService,
     required this.audioService,
+    this.supportService,
   });
 
   @override
@@ -34,6 +39,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   late ProgressionService _progressionService;
   late DailyChallengeService _dailyService;
   late AchievementService _achievementService;
+  late SupportService _supportService;
 
   AccountModel? _account;
   int _completedCount = 0;
@@ -41,6 +47,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   int _coins = 0;
   int _streak = 0;
   int _unlockedAchievements = 0;
+  PlayerLevel _playerLevel = const PlayerLevel(level: 5, currentXp: 150);
   bool _isLoading = true;
 
   @override
@@ -53,6 +60,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       repository: widget.repository,
       rewardService: rewardService,
     );
+    _supportService = widget.supportService ?? SupportService();
     _loadProfileData();
   }
 
@@ -78,6 +86,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _coins = coins;
         _streak = streakData['currentStreak'] ?? 0;
         _unlockedAchievements = achievements.where((a) => a.isUnlocked).length;
+        _playerLevel = PlayerLevel(level: (completed ~/ 10) + 1, currentXp: (completed % 10) * 25);
         _isLoading = false;
       });
     }
@@ -91,6 +100,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
         syncService: widget.syncService,
         audioService: widget.audioService,
         onAuthSuccess: _loadProfileData,
+      ),
+    );
+  }
+
+  void _openSupportDialog() {
+    widget.audioService.playSound(SoundType.buttonClick);
+    showDialog(
+      context: context,
+      builder: (_) => SupportDialog(
+        supportService: _supportService,
+        audioService: widget.audioService,
       ),
     );
   }
@@ -176,7 +196,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   children: [
                     // Profile Header Card
                     Container(
-                      padding: const EdgeInsets.all(20),
+                      padding: const EdgeInsets.all(18),
                       decoration: BoxDecoration(
                         color: AppTheme.bgLight,
                         borderRadius: BorderRadius.circular(24),
@@ -185,31 +205,60 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       child: Column(
                         children: [
                           CircleAvatar(
-                            radius: 36,
+                            radius: 32,
                             backgroundColor: AppTheme.primary,
                             child: Icon(
                               isGuest ? Icons.person_outline_rounded : Icons.person_rounded,
-                              size: 40,
+                              size: 36,
                               color: Colors.white,
                             ),
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 8),
                           Text(
                             account?.displayName ?? 'Guest Player',
                             style: const TextStyle(
-                              fontSize: 20,
+                              fontSize: 18,
                               fontWeight: FontWeight.bold,
                               color: Colors.white,
                             ),
                           ),
-                          if (account?.email != null) ...[
-                            const SizedBox(height: 2),
-                            Text(
-                              account!.email!,
-                              style: const TextStyle(fontSize: 12, color: Colors.white60),
+                          const SizedBox(height: 6),
+
+                          // Player XP Level Indicator
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: AppTheme.bgDark,
+                              borderRadius: BorderRadius.circular(16),
                             ),
-                          ],
-                          const SizedBox(height: 12),
+                            child: Row(
+                              children: [
+                                Text(
+                                  'Level ${_playerLevel.level}',
+                                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.goldStar),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: LinearProgressIndicator(
+                                      value: _playerLevel.progressRatio,
+                                      minHeight: 6,
+                                      backgroundColor: Colors.black26,
+                                      color: AppTheme.secondary,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  '${_playerLevel.currentXp}/${_playerLevel.requiredXpForNextLevel} XP',
+                                  style: const TextStyle(fontSize: 10, color: Colors.white60),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          const SizedBox(height: 10),
 
                           // Cloud Sync Status Badge
                           ListenableBuilder(
@@ -217,7 +266,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             builder: (context, _) {
                               final status = widget.syncService.status;
                               return Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                                 decoration: BoxDecoration(
                                   color: status == SyncStatus.synced
                                       ? AppTheme.secondary.withAlpha(50)
@@ -238,7 +287,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                           : status == SyncStatus.syncing
                                               ? Icons.cloud_sync_rounded
                                               : Icons.cloud_off_rounded,
-                                      size: 16,
+                                      size: 14,
                                       color: status == SyncStatus.synced
                                           ? AppTheme.secondary
                                           : Colors.white70,
@@ -252,7 +301,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                               : status == SyncStatus.syncing
                                                   ? 'Syncing...'
                                                   : 'Offline',
-                                      style: const TextStyle(fontSize: 12, color: Colors.white),
+                                      style: const TextStyle(fontSize: 11, color: Colors.white),
                                     ),
                                   ],
                                 ),
@@ -263,15 +312,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     ),
 
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 12),
 
                     // Gameplay Stats Grid
                     Expanded(
                       child: GridView.count(
                         crossAxisCount: 2,
-                        crossAxisSpacing: 12,
-                        mainAxisSpacing: 12,
-                        childAspectRatio: 1.5,
+                        crossAxisSpacing: 10,
+                        mainAxisSpacing: 10,
+                        childAspectRatio: 1.6,
                         children: [
                           _buildStatCard(
                             icon: Icons.grid_view_rounded,
@@ -303,6 +352,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             value: '$_unlockedAchievements / 11',
                             color: AppTheme.secondary,
                           ),
+                          InkWell(
+                            onTap: _openSupportDialog,
+                            borderRadius: BorderRadius.circular(20),
+                            child: Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: AppTheme.bgLight,
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(color: AppTheme.secondary.withAlpha(150)),
+                              ),
+                              child: const Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.headset_mic_rounded, color: AppTheme.secondary, size: 22),
+                                  SizedBox(height: 4),
+                                  Text('Feedback & Support', style: TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.bold)),
+                                ],
+                              ),
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -311,17 +380,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     if (isGuest)
                       SizedBox(
                         width: double.infinity,
-                        height: 52,
+                        height: 48,
                         child: ElevatedButton.icon(
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppTheme.primary,
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                           ),
                           icon: const Icon(Icons.cloud_upload_rounded),
-                          label: const Text(
-                            'SIGN IN / LINK ACCOUNT',
-                            style: TextStyle(fontWeight: FontWeight.bold),
-                          ),
+                          label: const Text('SIGN IN / LINK ACCOUNT', style: TextStyle(fontWeight: FontWeight.bold)),
                           onPressed: _openAuthModal,
                         ),
                       )
@@ -334,9 +400,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 foregroundColor: Colors.white,
                                 side: const BorderSide(color: Colors.white30),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                padding: const EdgeInsets.symmetric(vertical: 10),
                               ),
-                              icon: const Icon(Icons.logout_rounded, size: 20),
+                              icon: const Icon(Icons.logout_rounded, size: 18),
                               label: const Text('Sign Out'),
                               onPressed: _confirmSignOut,
                             ),
@@ -348,10 +414,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 foregroundColor: Colors.red,
                                 side: const BorderSide(color: Colors.red),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                padding: const EdgeInsets.symmetric(vertical: 10),
                               ),
-                              icon: const Icon(Icons.delete_forever_rounded, size: 20),
-                              label: const Text('Delete'),
+                              icon: const Icon(Icons.delete_forever_rounded, size: 18),
+                              label: const Text('Delete Account'),
                               onPressed: _confirmDeleteAccount,
                             ),
                           ),
@@ -359,7 +425,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     ],
 
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 10),
                   ],
                 ),
               ),
@@ -374,7 +440,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     required Color color,
   }) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: AppTheme.bgLight,
         borderRadius: BorderRadius.circular(20),
@@ -383,17 +449,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, color: color, size: 24),
-          const SizedBox(height: 4),
-          Text(
-            title,
-            style: const TextStyle(fontSize: 11, color: Colors.white60),
-          ),
+          Icon(icon, color: color, size: 22),
           const SizedBox(height: 2),
-          Text(
-            value,
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
-          ),
+          Text(title, style: const TextStyle(fontSize: 10, color: Colors.white60)),
+          const SizedBox(height: 2),
+          Text(value, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white)),
         ],
       ),
     );
